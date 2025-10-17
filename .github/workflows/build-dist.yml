@@ -41,20 +41,7 @@ jobs:
       - name: Detect entrypoints (forum required, admin optional)
         id: detect
         working-directory: js
-        run: |
-          # forum: allow .js or .ts
-          if [ -f forum.js ] || [ -f forum.ts ]; then
-            echo "HAS_FORUM=true" >> $GITHUB_ENV
-            if [ -f forum.js ]; then
-              echo "FORUM_ENTRY=forum.js" >> $GITHUB_ENV
-            else
-              echo "FORUM_ENTRY=forum.ts" >> $GITHUB_ENV
-            fi
-          else
-            echo "::error::Missing js/forum.{js,ts} entry. Create one that re-exports from ./src/forum (see Flarum docs)."
-            exit 1
-          fi
-
+        run: |      
           # admin: optional (.js or .ts)
           if [ -f admin.js ] || [ -f admin.ts ]; then
             echo "HAS_ADMIN=true" >> $GITHUB_ENV
