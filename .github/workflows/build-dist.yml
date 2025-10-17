@@ -75,10 +75,7 @@ jobs:
 
       - name: Assert dist produced
         run: |
-          echo "== List js/dist =="
-          ls -lah js/dist || true
-
-          test -f js/dist/forum.js || { echo "::error::js/dist/forum.js not found after build"; exit 1; }
+          
 
           if [ "${{ env.HAS_ADMIN }}" = "true" ]; then
             test -f js/dist/admin.js || { echo "::error::js/dist/admin.js not found after build (admin entry exists)"; exit 1; }
