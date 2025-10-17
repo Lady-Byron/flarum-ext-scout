@@ -19,9 +19,11 @@ class RemoveFromSearch extends \Laravel\Scout\Jobs\RemoveFromSearch
             collect($value->id)->map(function ($id) use ($value) {
                 $model = new ScoutModelWrapper(new $value->class);
 
-                $keyName = $this->getUnqualifiedScoutKeyName(
-                    $model->getScoutKeyName()
-                );
+                // FIX: 兼容 Scout 9 —— 直接拿 scout key 名，并去掉可能的表名前缀
+                $keyName = $model->getScoutKeyName();
+                if (strpos($keyName, '.') !== false) {
+                    $keyName = substr($keyName, strrpos($keyName, '.') + 1);
+                }
 
                 $model->getRealModel()->forceFill([$keyName => $id]);
 
@@ -30,3 +32,4 @@ class RemoveFromSearch extends \Laravel\Scout\Jobs\RemoveFromSearch
         );
     }
 }
+
