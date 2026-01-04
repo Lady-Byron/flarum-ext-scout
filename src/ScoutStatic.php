@@ -2,59 +2,115 @@
 
 namespace ClarkWinkelmann\Scout;
 
-use ClarkWinkelmann\AdvancedSearchHighlight\Highlighter;
 use Flarum\Discussion\Discussion;
 use Flarum\Post\Post;
 use Flarum\Settings\SettingsRepositoryInterface;
+use Flarum\User\User;
 use Illuminate\Support\Arr;
 use Laravel\Scout\Builder;
-use Laravel\Scout\Engines\MeiliSearchEngine;
+use ONGR\ElasticsearchDSL\Highlight\Highlight;
+use ONGR\ElasticsearchDSL\Search;
 
-/**
- * All the static method can't be implemented on UniversalModel since we don't know the target model
- * This class re-implements those methods identically, except they take the model class as first parameter
- */
 class ScoutStatic
 {
-    // This is not really the attributes to highlight, rather it's the attributes highlights will be extracted for
-    // The actual list of attributes to highlight is configured in the advanced-search-highlight extension
-    public static $attributesToHighlight = [
-        Discussion::class => [
-            'title',
-        ],
-        Post::class => [
-            'content',
-        ],
+    /**
+     * 存储 Elasticsearch 原生高亮结果
+     */
+    public static array $highlights = [
+        'discussions' => [],
+        'posts' => [],
+        'users' => [],
     ];
 
-    protected static function useQueue(): bool
+    /**
+     * 标记当前请求是否已清除高亮缓存
+     */
+    protected static bool $highlightsClearedOnce = false;
+
+    /**
+     * 需要高亮的字段配置
+     */
+    public static array $attributesToHighlight = [
+        Discussion::class => ['title'],
+        Post::class => ['content'],
+        User::class => ['username', 'displayName'],
+    ];
+
+    /**
+     * 高亮配置
+     * [FIX #4] encoder => 'html' 防止 XSS 攻击
+     */
+    public static array $highlightConfig = [
+        'pre_tags' => ['<mark>'],
+        'post_tags' => ['</mark>'],
+        'fragment_size' => 150,
+        'number_of_fragments' => 3,
+        'encoder' => 'html',
+    ];
+
+    /**
+     * 获取讨论的高亮结果
+     */
+    public static function getDiscussionHighlight(int $id): ?array
     {
-        $settings = resolve(SettingsRepositoryInterface::class);
-        return (bool)$settings->get('clarkwinkelmann-scout.queue');
+        return self::$highlights['discussions'][$id] ?? null;
+    }
+
+    /**
+     * 获取帖子的高亮结果
+     */
+    public static function getPostHighlight(int $id): ?array
+    {
+        return self::$highlights['posts'][$id] ?? null;
+    }
+
+    /**
+     * 获取用户的高亮结果
+     */
+    public static function getUserHighlight(int $id): ?array
+    {
+        return self::$highlights['users'][$id] ?? null;
+    }
+
+    /**
+     * 清除所有高亮缓存
+     */
+    public static function clearHighlights(): void
+    {
+        self::$highlights = [
+            'discussions' => [],
+            'posts' => [],
+            'users' => [],
+        ];
+    }
+
+    /**
+     * 每个请求只清除一次高亮缓存
+     * 防止同一请求中多次 Gambit 调用导致高亮被覆盖
+     */
+    public static function clearHighlightsOnce(): void
+    {
+        if (self::$highlightsClearedOnce) {
+            return;
+        }
+        self::$highlightsClearedOnce = true;
+        self::clearHighlights();
     }
 
     /**
      * Replacement for Searchable::makeAllSearchable
-     * @param string $class
-     * @param null $chunk
      */
     public static function makeAllSearchable(string $class, $chunk = null)
     {
         $self = new ScoutModelWrapper(new $class);
 
         $self->newQuery()
-            ->when(true, function ($query) use ($self) {
-                // We would need to change the visibility of this method to work here
-                // Since we know we are not using it, we will comment it out for now
-                //$self->makeAllSearchableUsing($query);
-            })
             ->orderBy($self->getKeyName())
             ->searchable($chunk);
     }
 
     /**
      * Replacement for Searchable::removeAllFromSearch
-     * @param string $class
      */
     public static function removeAllFromSearch(string $class)
     {
@@ -64,53 +120,15 @@ class ScoutStatic
     }
 
     /**
-     * Shortcut to obtain a Builder instance with the wrapper already set
-     * @param string $class
-     * @param string $query
-     * @param callable? $callback
-     * @return Builder
+     * 构建 Scout Builder，支持 ES 高亮
      */
     public static function makeBuilder(string $class, string $query, $callback = null): Builder
     {
         $wrapped = new ScoutModelWrapper(new $class);
 
-        $isMeilisearch = $wrapped->searchableUsing() instanceof MeiliSearchEngine;
-
-        if ($isMeilisearch && is_null($callback) && class_exists(Highlighter::class)) {
-            $callback = function ($meilisearch, $query, $searchParams) use ($class) {
-                $attributes = Arr::get(self::$attributesToHighlight, $class) ?? [];
-
-                $results = $meilisearch->rawSearch($query, $searchParams + [
-                        'attributesToHighlight' => $attributes,
-                        'showMatchesPosition' => true,
-                    ]);
-
-                foreach ($results['hits'] as $hit) {
-                    foreach ($attributes as $attribute) {
-                        $positions = Arr::get($hit, '_matchesPosition.' . $attribute);
-
-                        if (is_array($positions)) {
-                            foreach ($positions as $position) {
-                                // Meilisearch start index is in bytes while the length is in characters
-                                // This requires a mix of str and mb_str methods to extract characters in the right places
-                                $textStartingAtPosition = substr($hit[$attribute], $position['start']);
-                                $after = mb_substr($textStartingAtPosition, $position['length'], 1);
-
-                                // 4 bytes back should be enough to find a valid UTF8 character at the end
-                                $backtrackFromStartToFindFullCharacter = min($position['start'], 4);
-
-                                Highlighter::addHighlightRule(
-                                    mb_substr($textStartingAtPosition, 0, $position['length']),
-                                    $position['start'] === 0 ? null : mb_substr(substr($hit[$attribute], $position['start'] - $backtrackFromStartToFindFullCharacter, $backtrackFromStartToFindFullCharacter), -1),
-                                    $after === '' ? null : $after
-                                );
-                            }
-                        }
-                    }
-                }
-
-                return $results;
-            };
+        // 如果没有自定义 callback，使用 ES 高亮 callback
+        if (is_null($callback)) {
+            $callback = self::buildElasticsearchCallback($class, $wrapped);
         }
 
         $builder = resolve(Builder::class, [
@@ -122,19 +140,105 @@ class ScoutStatic
         $settings = resolve(SettingsRepositoryInterface::class);
         $limit = (int)$settings->get('clarkwinkelmann-scout.limit');
 
-        // This becomes the new default for every usage of the Builder class
-        // Developers can still customize it after getting the instance
         if ($limit > 0) {
             $builder->take($limit);
-        } else if ($isMeilisearch) {
-            // Meilisearch default limit of 20 is extremely low
-            // If you have a large number of models that aren't visible to guests
-            // you might end up with not a single result after the visibility scope is applied
-            // This value is only applied if the user didn't customize the setting above
-            // This value was not chosen for any particular reason. I expect it to change in the future based on feedback
+        } else {
             $builder->take(200);
         }
 
         return $builder;
+    }
+
+    /**
+     * 构建 Elasticsearch 回调（支持高亮）
+     */
+    protected static function buildElasticsearchCallback(string $class, ScoutModelWrapper $model): callable
+    {
+        $highlightFields = Arr::get(self::$attributesToHighlight, $class) ?? [];
+        $indexName = $model->searchableAs();
+
+        return function (\Elastic\Elasticsearch\Client $client, Search $body) use ($class, $indexName, $highlightFields) {
+            // 添加 Elasticsearch 原生高亮
+            if (!empty($highlightFields)) {
+                $highlight = new Highlight();
+                $highlight->setTags(self::$highlightConfig['pre_tags'], self::$highlightConfig['post_tags']);
+
+                foreach ($highlightFields as $field) {
+                    $highlight->addField($field, [
+                        'fragment_size' => self::$highlightConfig['fragment_size'],
+                        'number_of_fragments' => self::$highlightConfig['number_of_fragments'],
+                    ]);
+                }
+
+                $body->addHighlight($highlight);
+            }
+
+            $bodyArray = $body->toArray();
+
+            // [FIX #4] 添加 HTML encoder 防止 XSS
+            if (isset($bodyArray['highlight'])) {
+                $bodyArray['highlight']['encoder'] = self::$highlightConfig['encoder'];
+            }
+
+            $result = $client->search([
+                'index' => $indexName,
+                'body' => $bodyArray,
+            ])->asArray();
+
+            // 提取并存储高亮结果
+            self::extractHighlights($result, $class);
+
+            return $result;
+        };
+    }
+
+    /**
+     * 从 Elasticsearch 响应中提取高亮结果
+     */
+    protected static function extractHighlights(array $result, string $class): void
+    {
+        $hits = Arr::get($result, 'hits.hits', []);
+
+        $key = match ($class) {
+            Discussion::class => 'discussions',
+            Post::class => 'posts',
+            User::class => 'users',
+            default => null,
+        };
+
+        if (!$key) {
+            return;
+        }
+
+        foreach ($hits as $hit) {
+            $id = (int)($hit['_id'] ?? 0);
+            if ($id <= 0) {
+                continue;
+            }
+
+            $highlight = Arr::get($hit, 'highlight', []);
+            if (!empty($highlight)) {
+                self::$highlights[$key][$id] = [];
+                foreach ($highlight as $field => $fragments) {
+                    self::$highlights[$key][$id][$field] = $fragments;
+                }
+            }
+        }
+    }
+
+    /**
+     * 从 Elasticsearch 结果中提取 ID 列表
+     */
+    public static function extractIdsFromResult($results): array
+    {
+        if (!is_array($results)) {
+            return [];
+        }
+
+        return collect(Arr::get($results, 'hits.hits', []))
+            ->map(fn($hit) => (int)($hit['_id'] ?? 0))
+            ->filter(fn($id) => $id > 0)
+            ->values()
+            ->all();
     }
 }
