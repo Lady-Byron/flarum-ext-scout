@@ -180,6 +180,16 @@ class ScoutStatic
                 $bodyArray['highlight']['encoder'] = self::$highlightConfig['encoder'];
             }
 
+            // === DEBUG: 打印 ES DSL（只建议临时开）===
+            if (function_exists('logger')) {
+                logger()->debug('SCOUT ES DSL', [
+                                'index' => $indexName,
+                                'model' => $class,
+                                'body'  => $bodyArray,
+                                'query' => $bodyArray['query'] ?? null,
+                ]);
+            }
+
             $result = $client->search([
                 'index' => $indexName,
                 'body' => $bodyArray,
