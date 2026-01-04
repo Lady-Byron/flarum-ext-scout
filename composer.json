@@ -1,55 +1,30 @@
 {
-    "name": "clarkwinkelmann/flarum-ext-scout",
-    "description": "Algolia and Meilisearch search for Flarum",
-    "keywords": [
-        "flarum"
-    ],
+    "name": "lady-byron/scout",
+    "description": "Elasticsearch search for Flarum",
+    "keywords": ["flarum"],
     "type": "flarum-extension",
     "license": "MIT",
     "require": {
         "flarum/core": "^1.2",
         "laravel/scout": "^9.4",
-        "algolia/algoliasearch-client-php": "^3.2",
-        "http-interop/http-factory-guzzle": "^1.0",
-        "meilisearch/meilisearch-php": "*"
-    },
-    "require-dev": {
-        "teamtnt/laravel-scout-tntsearch-driver": "^11.6"
-    },
-    "suggest": {
-        "clarkwinkelmann/flarum-ext-advanced-search-highlight": "*"
-    },
-    "authors": [
-        {
-            "name": "Clark Winkelmann",
-            "email": "clark.winkelmann@gmail.com",
-            "role": "Developer"
-        }
-    ],
-    "support": {
-        "source": "https://github.com/clarkwinkelmann/flarum-ext-scout",
-        "forum": "https://discuss.flarum.org/d/30874"
+        "matchish/laravel-scout-elasticsearch": "^7.12",
+        "fof/user-bio": "*"
     },
     "autoload": {
         "psr-4": {
             "ClarkWinkelmann\\Scout\\": "src/"
         },
-        "files": [
-            "src/helpers.php"
-        ]
+        "files": ["src/helpers.php"]
     },
     "extra": {
         "flarum-extension": {
-            "title": "Scout Search",
+            "title": "Elasticsearch",
             "category": "feature",
             "icon": {
                 "name": "fas fa-search",
                 "backgroundColor": "#f47f68",
                 "color": "#fff"
-            },
-            "optional-dependencies": [
-                "clarkwinkelmann/flarum-ext-advanced-search-highlight"
-            ]
+            }
         }
     }
 }
