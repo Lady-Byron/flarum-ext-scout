@@ -13,31 +13,30 @@ class DiscussionGambit implements GambitInterface
 {
     public function apply(SearchState $search, $bit)
     {
+        // 清除之前的高亮缓存
+        ScoutStatic::clearHighlights();
+
+        // 搜索讨论标题
         $discussionBuilder = ScoutStatic::makeBuilder(Discussion::class, $bit);
+        $discussionIds = ScoutStatic::extractIdsFromResult($discussionBuilder->raw());
 
-        $discussionIds = $discussionBuilder->keys()->all();
-
+        // 搜索帖子内容
         $postBuilder = ScoutStatic::makeBuilder(Post::class, $bit);
+        $postIds = ScoutStatic::extractIdsFromResult($postBuilder->raw());
 
-        $postIds = $postBuilder->keys()->all();
         $postIdsCount = count($postIds);
-
-        // We could replace the "where field" with "where false" everywhere when there are no IDs, but it's easier to
-        // keep a FIELD() statement and just hard-code some values to prevent SQL errors
-        // we know nothing will be returned anyway, so it doesn't really matter what impact it has on the query
-        $postIdsSql = $postIdsCount > 0 ? str_repeat(', ?', count($postIds)) : ', 0';
+        $postIdsSql = $postIdsCount > 0 ? str_repeat(', ?', $postIdsCount) : ', 0';
 
         $query = $search->getQuery();
         $grammar = $query->getGrammar();
 
+        // 以下 SQL 逻辑与原版保持一致
         $allMatchingPostsQuery = Post::whereVisibleTo($search->getActor())
             ->select('posts.discussion_id')
             ->selectRaw('FIELD(id' . $postIdsSql . ') as priority', $postIds)
             ->where('posts.type', 'comment')
             ->whereIn('id', $postIds);
 
-        // Using wrap() instead of wrapTable() in join subquery to skip table prefixes
-        // Using raw() in the join table name to use the same prefixless name
         $bestMatchingPostQuery = Post::query()
             ->select('posts.discussion_id')
             ->selectRaw('min(matching_posts.priority) as min_priority')
@@ -50,7 +49,6 @@ class DiscussionGambit implements GambitInterface
             ->groupBy('posts.discussion_id')
             ->addBinding($allMatchingPostsQuery->getBindings(), 'join');
 
-        // Code based on Flarum\Discussion\Search\Gambit\FulltextGambit
         $subquery = Post::whereVisibleTo($search->getActor())
             ->select('posts.discussion_id')
             ->selectRaw('id as most_relevant_post_id')
@@ -80,8 +78,21 @@ class DiscussionGambit implements GambitInterface
             ->groupBy('discussions.id')
             ->addBinding($subquery->getBindings(), 'join');
 
-        $search->setDefaultSort(function ($query) use ($postIdsSql, $postIds) {
-            $query->orderByRaw('FIELD(id' . $postIdsSql . ')', $postIds);
+        // 设置排序：标题匹配优先，然后按帖子匹配排序
+        $search->setDefaultSort(function ($query) use ($discussionIds, $postIds) {
+            $discussionIdsCount = count($discussionIds);
+            $postIdsCount = count($postIds);
+            
+            // 标题匹配的讨论排在前面
+            if ($discussionIdsCount > 0) {
+                $discussionIdsSql = str_repeat(', ?', $discussionIdsCount);
+                $query->orderByRaw('CASE WHEN discussions.id IN (' . ltrim($discussionIdsSql, ', ') . ') THEN 0 ELSE 1 END', $discussionIds);
+            }
+            // 按照最相关帖子在搜索结果中的顺序排序
+            if ($postIdsCount > 0) {
+                $postIdsSql = str_repeat(', ?', $postIdsCount);
+                $query->orderByRaw('FIELD(most_relevant_post_id' . $postIdsSql . ')', $postIds);
+            }
         });
     }
 }
