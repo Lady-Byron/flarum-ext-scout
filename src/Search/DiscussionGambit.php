@@ -73,36 +73,29 @@ class DiscussionGambit implements GambitInterface
                 new Expression('(' . $subquery->toSql() . ') ' . $grammar->wrap('posts_ft')),
                 $query->raw('posts_ft.discussion_id'),
                 '=',
-                // 关键：这里也不要写死 discussions.id，用 wrapTable('discussions') 适配前缀
-                $grammar->wrapTable('discussions') . '.' . $grammar->wrap('id')
+                'discussions.id'
             )
-            // 关键：groupBy 也不要写死 discussions.id
-            ->groupBy($grammar->wrapTable('discussions') . '.' . $grammar->wrap('id'))
+            ->groupBy('discussions.id')
             ->addBinding($subquery->getBindings(), 'join');
 
         // 设置排序：标题匹配优先，然后按帖子匹配排序
-        $search->setDefaultSort(function ($query) use ($discussionIds, $postIds) {
-            $grammar = $query->getGrammar();
-
-            // 关键：不要写死 discussions.id（无前缀表名会炸）
-            $discussionIdCol = $grammar->wrapTable('discussions') . '.' . $grammar->wrap('id');
-
+        // 注意：闭包中需要使用 $grammar 来正确处理表前缀
+        $search->setDefaultSort(function ($query) use ($discussionIds, $postIds, $grammar) {
+            $discussionIdsCount = count($discussionIds);
+            $postIdsCount = count($postIds);
+            
+            // 获取带前缀的表名
+            $discussionsTable = $grammar->wrapTable('discussions');
+            
             // 标题匹配的讨论排在前面
-            if (count($discussionIds) > 0) {
-                $placeholders = implode(', ', array_fill(0, count($discussionIds), '?'));
-                $query->orderByRaw(
-                    "CASE WHEN {$discussionIdCol} IN ({$placeholders}) THEN 0 ELSE 1 END",
-                    $discussionIds
-                );
+            if ($discussionIdsCount > 0) {
+                $discussionIdsSql = str_repeat(', ?', $discussionIdsCount);
+                $query->orderByRaw('CASE WHEN ' . $discussionsTable . '.id IN (' . ltrim($discussionIdsSql, ', ') . ') THEN 0 ELSE 1 END', $discussionIds);
             }
-
             // 按照最相关帖子在搜索结果中的顺序排序
-            if (count($postIds) > 0) {
-                $placeholders = implode(', ', array_fill(0, count($postIds), '?'));
-                $query->orderByRaw(
-                    "FIELD(most_relevant_post_id, {$placeholders})",
-                    $postIds
-                );
+            if ($postIdsCount > 0) {
+                $postIdsSql = str_repeat(', ?', $postIdsCount);
+                $query->orderByRaw('FIELD(most_relevant_post_id' . $postIdsSql . ')', $postIds);
             }
         });
     }
