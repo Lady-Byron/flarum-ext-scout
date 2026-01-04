@@ -56,7 +56,7 @@ class Scout implements ExtenderInterface
 
         $manager = $container->make(ExtensionManager::class);
 
-        if (!$manager->isEnabled('clarkwinkelmann-scout')) {
+        if (!$manager->isEnabled('lady-byron-scout')) {
             return;
         }
 
