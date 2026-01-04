@@ -1,107 +1,80 @@
 import app from 'flarum/admin/app';
 
 app.initializers.add('clarkwinkelmann-scout', () => {
-    app.extensionData.for('clarkwinkelmann-scout')
-        .registerSetting({
-            type: 'select',
-            setting: 'clarkwinkelmann-scout.driver',
-            options: {
-                null: app.translator.trans('clarkwinkelmann-scout.admin.setting.driverOption.null'),
-                algolia: app.translator.trans('clarkwinkelmann-scout.admin.setting.driverOption.algolia'),
-                meilisearch: app.translator.trans('clarkwinkelmann-scout.admin.setting.driverOption.meilisearch'),
-                tntsearch: app.translator.trans('clarkwinkelmann-scout.admin.setting.driverOption.tntsearch'),
-            },
-            default: 'null',
-            label: app.translator.trans('clarkwinkelmann-scout.admin.setting.driver'),
-        })
-        .registerSetting({
-            type: 'text',
-            setting: 'clarkwinkelmann-scout.prefix',
-            label: app.translator.trans('clarkwinkelmann-scout.admin.setting.prefix'),
-        })
-        .registerSetting({
-            type: 'switch',
-            setting: 'clarkwinkelmann-scout.queue',
-            label: app.translator.trans('clarkwinkelmann-scout.admin.setting.queue'),
-            help: app.translator.trans('clarkwinkelmann-scout.admin.setting.queueHelp'),
-        })
-        .registerSetting({
-            type: 'number',
-            setting: 'clarkwinkelmann-scout.limit',
-            label: app.translator.trans('clarkwinkelmann-scout.admin.setting.limit'),
-            placeholder: app.translator.trans('clarkwinkelmann-scout.admin.setting.limitPlaceholder'),
-            help: app.translator.trans('clarkwinkelmann-scout.admin.setting.limitHelp'),
-        })
-        .registerSetting({
-            type: 'number',
-            setting: 'clarkwinkelmann-scout.queryMinLength',
-            label: app.translator.trans('clarkwinkelmann-scout.admin.setting.queryMinLength'),
-            placeholder: app.translator.trans('clarkwinkelmann-scout.admin.setting.queryMinLengthPlaceholder'),
-            help: app.translator.trans('clarkwinkelmann-scout.admin.setting.queryMinLengthHelp'),
-        })
-        .registerSetting({
-            type: 'text',
-            setting: 'clarkwinkelmann-scout.algoliaId',
-            label: app.translator.trans('clarkwinkelmann-scout.admin.setting.algoliaId'),
-        })
-        .registerSetting({
-            type: 'text',
-            setting: 'clarkwinkelmann-scout.algoliaSecret',
-            label: app.translator.trans('clarkwinkelmann-scout.admin.setting.algoliaSecret'),
-        })
-        .registerSetting({
-            type: 'text',
-            setting: 'clarkwinkelmann-scout.algoliaConnectTimeout',
-            label: app.translator.trans('clarkwinkelmann-scout.admin.setting.algoliaConnectTimeout'),
-        })
-        .registerSetting({
-            type: 'text',
-            setting: 'clarkwinkelmann-scout.algoliaReadTimeout',
-            label: app.translator.trans('clarkwinkelmann-scout.admin.setting.algoliaReadTimeout'),
-        })
-        .registerSetting({
-            type: 'text',
-            setting: 'clarkwinkelmann-scout.algoliaWriteTimeout',
-            label: app.translator.trans('clarkwinkelmann-scout.admin.setting.algoliaWriteTimeout'),
-        })
-        .registerSetting({
-            type: 'text',
-            setting: 'clarkwinkelmann-scout.meilisearchHost',
-            label: app.translator.trans('clarkwinkelmann-scout.admin.setting.meilisearchHost'),
-            placeholder: '127.0.0.1:7700',
-        })
-        .registerSetting({
-            type: 'text',
-            setting: 'clarkwinkelmann-scout.meilisearchKey',
-            label: app.translator.trans('clarkwinkelmann-scout.admin.setting.meilisearchKey'),
-        })
-        .registerSetting({
-            type: 'number',
-            setting: 'clarkwinkelmann-scout.tntsearchMaxDocs',
-            label: app.translator.trans('clarkwinkelmann-scout.admin.setting.tntsearchMaxDocs'),
-            placeholder: '500',
-        })
-        .registerSetting({
-            type: 'switch',
-            setting: 'clarkwinkelmann-scout.tntsearchFuzziness',
-            label: app.translator.trans('clarkwinkelmann-scout.admin.setting.tntsearchFuzziness'),
-        })
-        .registerSetting({
-            type: 'number',
-            setting: 'clarkwinkelmann-scout.tntsearchFuzzyDistance',
-            label: app.translator.trans('clarkwinkelmann-scout.admin.setting.tntsearchFuzzyDistance'),
-            placeholder: '2',
-        })
-        .registerSetting({
-            type: 'number',
-            setting: 'clarkwinkelmann-scout.tntsearchFuzzyPrefixLength',
-            label: app.translator.trans('clarkwinkelmann-scout.admin.setting.tntsearchFuzzyPrefixLength'),
-            placeholder: '50',
-        })
-        .registerSetting({
-            type: 'text',
-            setting: 'clarkwinkelmann-scout.tntsearchFuzzyMaxExpansions',
-            label: app.translator.trans('clarkwinkelmann-scout.admin.setting.tntsearchFuzzyMaxExpansions'),
-            placeholder: '2',
-        });
+  app.extensionData.for('clarkwinkelmann-scout')
+    .registerSetting({
+      type: 'select',
+      setting: 'clarkwinkelmann-scout.driver',
+      options: {
+        null: app.translator.trans('clarkwinkelmann-scout.admin.setting.driverDisabled'),
+        elasticsearch: 'Elasticsearch',
+      },
+      default: 'null',
+      label: app.translator.trans('clarkwinkelmann-scout.admin.setting.driver'),
+    })
+    .registerSetting({
+      type: 'text',
+      setting: 'clarkwinkelmann-scout.prefix',
+      label: app.translator.trans('clarkwinkelmann-scout.admin.setting.prefix'),
+      help: app.translator.trans('clarkwinkelmann-scout.admin.setting.prefixHelp'),
+    })
+    .registerSetting({
+      type: 'switch',
+      setting: 'clarkwinkelmann-scout.queue',
+      label: app.translator.trans('clarkwinkelmann-scout.admin.setting.queue'),
+      help: app.translator.trans('clarkwinkelmann-scout.admin.setting.queueHelp'),
+    })
+    .registerSetting({
+      type: 'number',
+      setting: 'clarkwinkelmann-scout.limit',
+      label: app.translator.trans('clarkwinkelmann-scout.admin.setting.limit'),
+      placeholder: '200',
+      help: app.translator.trans('clarkwinkelmann-scout.admin.setting.limitHelp'),
+    })
+    .registerSetting({
+      type: 'number',
+      setting: 'clarkwinkelmann-scout.queryMinLength',
+      label: app.translator.trans('clarkwinkelmann-scout.admin.setting.queryMinLength'),
+      placeholder: '3',
+      help: app.translator.trans('clarkwinkelmann-scout.admin.setting.queryMinLengthHelp'),
+    })
+    // Elasticsearch Settings
+    .registerSetting({
+      type: 'text',
+      setting: 'clarkwinkelmann-scout.elasticsearchHost',
+      label: app.translator.trans('clarkwinkelmann-scout.admin.setting.elasticsearchHost'),
+      placeholder: 'localhost:9200',
+    })
+    .registerSetting({
+      type: 'select',
+      setting: 'clarkwinkelmann-scout.elasticsearchAuthType',
+      options: {
+        none: app.translator.trans('clarkwinkelmann-scout.admin.setting.elasticsearchAuthTypeNone'),
+        basic: app.translator.trans('clarkwinkelmann-scout.admin.setting.elasticsearchAuthTypeBasic'),
+        apikey: app.translator.trans('clarkwinkelmann-scout.admin.setting.elasticsearchAuthTypeApikey'),
+      },
+      default: 'none',
+      label: app.translator.trans('clarkwinkelmann-scout.admin.setting.elasticsearchAuthType'),
+    })
+    .registerSetting({
+      type: 'text',
+      setting: 'clarkwinkelmann-scout.elasticsearchUsername',
+      label: app.translator.trans('clarkwinkelmann-scout.admin.setting.elasticsearchUsername'),
+    })
+    .registerSetting({
+      type: 'password',
+      setting: 'clarkwinkelmann-scout.elasticsearchPassword',
+      label: app.translator.trans('clarkwinkelmann-scout.admin.setting.elasticsearchPassword'),
+    })
+    .registerSetting({
+      type: 'password',
+      setting: 'clarkwinkelmann-scout.elasticsearchApiKey',
+      label: app.translator.trans('clarkwinkelmann-scout.admin.setting.elasticsearchApiKey'),
+    })
+    .registerSetting({
+      type: 'switch',
+      setting: 'clarkwinkelmann-scout.elasticsearchSslVerification',
+      label: app.translator.trans('clarkwinkelmann-scout.admin.setting.elasticsearchSslVerification'),
+      help: app.translator.trans('clarkwinkelmann-scout.admin.setting.elasticsearchSslVerificationHelp'),
+    });
 });
