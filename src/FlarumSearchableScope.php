@@ -11,9 +11,6 @@ use Illuminate\Support\Collection;
 use Laravel\Scout\Events\ModelsFlushed;
 use Laravel\Scout\Events\ModelsImported;
 
-/**
- * A re-implementation of Scout's SearchableScope that we can apply to generic models that don'have the Searchable trait
- */
 class FlarumSearchableScope implements Scope
 {
     public function apply(EloquentBuilder $builder, Model $model)
@@ -21,14 +18,13 @@ class FlarumSearchableScope implements Scope
         //
     }
 
-    protected static function dispatchEvent(string $eventClass, Collection $models)
+    // [FIX #1] 改为 public static，允许从闭包内调用
+    public static function dispatchEvent(string $eventClass, Collection $models)
     {
         resolve(Dispatcher::class)->dispatch(new $eventClass($models->map(function (Model $model) {
-            // For consistency, extract any wrapper so that the event contains an array of real models only
             if ($model instanceof ScoutModelWrapper) {
                 return $model->getRealModel();
             }
-
             return $model;
         })));
     }
@@ -41,7 +37,6 @@ class FlarumSearchableScope implements Scope
                     if (!($model instanceof ScoutModelWrapper)) {
                         $model = new ScoutModelWrapper($model);
                     }
-
                     return $model->shouldBeSearchable();
                 })->searchable();
 
@@ -52,7 +47,6 @@ class FlarumSearchableScope implements Scope
         $builder->macro('unsearchable', function (EloquentBuilder $builder, $chunk = null) {
             $builder->chunkById($chunk ?: 500, function ($models) {
                 $models->unsearchable();
-
                 FlarumSearchableScope::dispatchEvent(ModelsFlushed::class, $models);
             });
         });
@@ -63,7 +57,6 @@ class FlarumSearchableScope implements Scope
                     if (!($model instanceof ScoutModelWrapper)) {
                         $model = new ScoutModelWrapper($model);
                     }
-
                     return $model->shouldBeSearchable();
                 })->searchable();
 
@@ -74,7 +67,6 @@ class FlarumSearchableScope implements Scope
         HasManyThrough::macro('unsearchable', function ($chunk = null) {
             $this->chunkById($chunk ?: 500, function ($models) {
                 $models->unsearchable();
-
                 FlarumSearchableScope::dispatchEvent(ModelsFlushed::class, $models);
             });
         });
