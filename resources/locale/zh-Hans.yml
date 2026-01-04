@@ -1,0 +1,30 @@
+clarkwinkelmann-scout:
+  admin:
+    setting:
+      driver: 搜索驱动
+      driverDisabled: 已禁用
+
+      prefix: 索引前缀
+      prefixHelp: 用于 Elasticsearch 索引名称的前缀
+
+      queue: 使用队列
+      queueHelp: 通过队列异步处理索引更新
+
+      limit: 结果数量上限
+      limitHelp: Elasticsearch 返回的最大结果数
+
+      queryMinLength: 最小查询长度
+      queryMinLengthHelp: 触发搜索所需的最少字符数
+
+      elasticsearchHost: Elasticsearch 地址
+      elasticsearchAuthType: 认证方式
+      elasticsearchAuthTypeNone: 无
+      elasticsearchAuthTypeBasic: 基本认证
+      elasticsearchAuthTypeApikey: API 秘钥
+
+      elasticsearchUsername: 用户名
+      elasticsearchPassword: 密码
+      elasticsearchApiKey: API Key
+
+      elasticsearchSslVerification: SSL 证书验证
+      elasticsearchSslVerificationHelp: 使用自签名证书时可关闭验证（不建议在公网环境关闭）
