@@ -11,18 +11,17 @@ class UserGambit implements GambitInterface
 {
     public function apply(SearchState $search, $bit)
     {
-        $builder = ScoutStatic::makeBuilder(User::class, $bit);
+        ScoutStatic::clearHighlights();
 
-        $ids = $builder->keys();
+        $builder = ScoutStatic::makeBuilder(User::class, $bit);
+        $ids = ScoutStatic::extractIdsFromResult($builder->raw());
 
         $search->getQuery()->whereIn('id', $ids);
 
         $search->setDefaultSort(function ($query) use ($ids) {
-            if (!count($ids)) {
-                return;
+            if (count($ids)) {
+                $query->orderByRaw('FIELD(id' . str_repeat(', ?', count($ids)) . ')', $ids);
             }
-
-            $query->orderByRaw('FIELD(id' . str_repeat(', ?', count($ids)) . ')', $ids);
         });
     }
 }
