@@ -5,6 +5,8 @@ namespace ClarkWinkelmann\Scout;
 use ClarkWinkelmann\Scout\Job\MakeSearchable;
 use ClarkWinkelmann\Scout\Job\RemoveFromSearch;
 use ClarkWinkelmann\Scout\Search\ImprovedGambitManager;
+use Elastic\Elasticsearch\Client as ElasticsearchClient;
+use Elastic\Elasticsearch\ClientBuilder as ElasticsearchClientBuilder;
 use Flarum\Foundation\AbstractServiceProvider;
 use Flarum\Frontend\Assets;
 use Flarum\Frontend\Compiler\Source\SourceCollector;
@@ -15,28 +17,38 @@ use Illuminate\Support\Arr;
 use Illuminate\Support\Collection;
 use Laravel\Scout\EngineManager;
 use Laravel\Scout\Scout;
-use MeiliSearch\Client as MeiliSearch;
 
-/**
- * Similar to Laravel\Scout\ScoutServiceProvider without the config and command parts
- */
 class ScoutServiceProvider extends AbstractServiceProvider
 {
     public function register()
     {
-        if (class_exists(MeiliSearch::class)) {
-            $this->container->singleton(MeiliSearch::class, function () {
-                /**
-                 * @var SettingsRepositoryInterface $settings
-                 */
-                $settings = $this->container->make(SettingsRepositoryInterface::class);
+        // Elasticsearch 8.x 客户端
+        $this->container->singleton(ElasticsearchClient::class, function () {
+            $settings = $this->container->make(SettingsRepositoryInterface::class);
+            $host = $settings->get('clarkwinkelmann-scout.elasticsearchHost') ?: 'localhost:9200';
 
-                return new MeiliSearch(
-                    $settings->get('clarkwinkelmann-scout.meilisearchHost') ?: '127.0.0.1:7700',
-                    $settings->get('clarkwinkelmann-scout.meilisearchKey')
-                );
-            });
-        }
+            $builder = ElasticsearchClientBuilder::create()->setHosts([$host]);
+
+            $authType = $settings->get('clarkwinkelmann-scout.elasticsearchAuthType') ?: 'none';
+            if ($authType === 'basic') {
+                $username = $settings->get('clarkwinkelmann-scout.elasticsearchUsername');
+                $password = $settings->get('clarkwinkelmann-scout.elasticsearchPassword');
+                if ($username && $password) {
+                    $builder->setBasicAuthentication($username, $password);
+                }
+            } elseif ($authType === 'apikey') {
+                $apiKey = $settings->get('clarkwinkelmann-scout.elasticsearchApiKey');
+                if ($apiKey) {
+                    $builder->setApiKey($apiKey);
+                }
+            }
+
+            if ($settings->get('clarkwinkelmann-scout.elasticsearchSslVerification') === '0') {
+                $builder->setSSLVerification(false);
+            }
+
+            return $builder->build();
+        });
 
         $this->container->singleton(EngineManager::class, function ($app) {
             return new FlarumEngineManager($app);
@@ -53,20 +65,10 @@ class ScoutServiceProvider extends AbstractServiceProvider
             return [];
         });
 
-        // It's better to inject some javascript directly rather than write a javascript module. Benefits:
-        // - No additional bundle size if the feature is not used.
-        // - No need to wait for app.forum to be ready.
-        // - No Webpack overhead code.
-        // We could also skip the initializer entirely but this will produce better errors if something goes wrong.
-        // Only downside of this approach is that the cache must be cleared when the setting is changed.
+        // 最小查询长度设置
         $this->container->resolving('flarum.assets.forum', function (Assets $assets) {
-            /**
-             * @var $settings SettingsRepositoryInterface
-             */
             $settings = $this->container->make(SettingsRepositoryInterface::class);
-
             $length = (int)$settings->get('clarkwinkelmann-scout.queryMinLength');
-
             if ($length > 0) {
                 $assets->js(function (SourceCollector $sources) use ($length) {
                     $sources->addString(function () use ($length) {
@@ -80,9 +82,6 @@ class ScoutServiceProvider extends AbstractServiceProvider
     public function boot()
     {
         Collection::macro('searchable', function () {
-            /**
-             * @var Collection $this
-             */
             if ($this->isEmpty()) {
                 return;
             }
@@ -91,27 +90,20 @@ class ScoutServiceProvider extends AbstractServiceProvider
                 if ($model instanceof ScoutModelWrapper) {
                     return $model;
                 }
-
                 return new ScoutModelWrapper($model);
             });
 
             $first = $wrappedCollection->first();
-
             $settings = resolve(SettingsRepositoryInterface::class);
 
             if (!$settings->get('clarkwinkelmann-scout.queue')) {
                 return $first->searchableUsing()->update($wrappedCollection);
             }
 
-            // Queue and connection choice has been removed compared to original Scout code
-            // could be re-introduced later if we implement them in the Flarum version
             resolve(Dispatcher::class)->dispatch(new MakeSearchable($wrappedCollection));
         });
 
         Collection::macro('unsearchable', function () {
-            /**
-             * @var Collection $this
-             */
             if ($this->isEmpty()) {
                 return;
             }
@@ -120,25 +112,21 @@ class ScoutServiceProvider extends AbstractServiceProvider
                 if ($model instanceof ScoutModelWrapper) {
                     return $model;
                 }
-
                 return new ScoutModelWrapper($model);
             });
 
             $first = $wrappedCollection->first();
-
             $settings = resolve(SettingsRepositoryInterface::class);
 
             if (!$settings->get('clarkwinkelmann-scout.queue')) {
                 return $first->searchableUsing()->delete($wrappedCollection);
             }
 
-            // Queue and connection choice has been removed compared to original Scout code
             resolve(Dispatcher::class)->dispatch(new RemoveFromSearch($wrappedCollection));
         });
 
-        // Override the GambitManager binding set by Flarum's SearchServiceProvider
+        // Override GambitManager
         $fullTextGambits = $this->container->make('flarum.simple_search.fulltext_gambits');
-
         foreach ($fullTextGambits as $searcher => $fullTextGambitClass) {
             $this->container
                 ->when($searcher)
@@ -148,7 +136,6 @@ class ScoutServiceProvider extends AbstractServiceProvider
                     foreach (Arr::get($this->container->make('flarum.simple_search.gambits'), $searcher, []) as $gambit) {
                         $gambitManager->add($this->container->make($gambit));
                     }
-
                     return $gambitManager;
                 });
         }
