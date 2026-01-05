@@ -178,4 +178,27 @@ return [
 
         return $attributes;
     }),
+
+    (new Extend\ApiSerializer(DiscussionSerializer::class))
+    ->attributes(function (DiscussionSerializer $serializer, Discussion $discussion, array $attributes): array {
+        $discussionHighlight = ScoutStatic::getDiscussionHighlight($discussion->id);
+        $attributes['titleHighlight'] = $discussionHighlight['title'][0] ?? null;
+
+        $mostRelevantPostId = $discussion->most_relevant_post_id ?? null;
+        
+        // 详细日志
+        if ($mostRelevantPostId && in_array($mostRelevantPostId, array_keys(ScoutStatic::$highlights['posts']))) {
+            $postHighlight = ScoutStatic::getPostHighlight($mostRelevantPostId);
+            resolve('log')->info('Scout Post Highlight', [
+                'discussion_id' => $discussion->id,
+                'post_id' => $mostRelevantPostId,
+                'highlight_data' => $postHighlight,
+            ]);
+            $attributes['contentHighlight'] = $postHighlight['content'][0] ?? null;
+        } else {
+            $attributes['contentHighlight'] = null;
+        }
+
+        return $attributes;
+    }),
 ];
