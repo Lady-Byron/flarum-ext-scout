@@ -29,10 +29,18 @@
   }
 }
 
-// 搜索结果页面高亮
-.DiscussionListItem-title mark,
-.item-excerpt mark {
-  background-color: rgba(255, 213, 79, 0.4);
+// 搜索结果页面高亮 - 使用更具体的选择器覆盖 Flarum 默认样式
+.DiscussionListItem-title mark {
+  background-color: rgba(255, 213, 79, 0.4) !important;
+  color: inherit;
+  padding: 0 2px;
+  border-radius: 2px;
+}
+
+.DiscussionListItem-info .item-excerpt mark {
+  background-color: rgba(255, 213, 79, 0.4) !important;
+  background: rgba(255, 213, 79, 0.4) !important;
+  box-shadow: none;
   color: inherit;
   padding: 0 2px;
   border-radius: 2px;
