@@ -67,10 +67,8 @@ app.initializers.add('lady-byron-scout', () => {
     const titleHighlight = discussion.attribute('titleHighlight');
     const contentHighlight = discussion.attribute('contentHighlight');
 
-    // 如果都没有高亮，直接返回
     if (!titleHighlight && !contentHighlight) return;
 
-    // 递归查找并替换元素
     const replaceHighlights = (node: any): void => {
       if (!node || typeof node !== 'object') return;
 
@@ -82,7 +80,7 @@ app.initializers.add('lady-byron-scout', () => {
           return;
         }
         // 替换正文摘要
-        if (cls.includes('DiscussionListItem-excerpt') && contentHighlight) {
+        if (cls.includes('item-excerpt') && contentHighlight) {
           node.children = [m.trust(contentHighlight)];
           return;
         }
