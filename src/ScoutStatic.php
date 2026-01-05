@@ -181,14 +181,12 @@ class ScoutStatic
             }
 
             // === DEBUG: 打印 ES DSL（只建议临时开）===
-            if (function_exists('logger')) {
-                logger()->debug('SCOUT ES DSL', [
-                                'index' => $indexName,
-                                'model' => $class,
-                                'body'  => $bodyArray,
-                                'query' => $bodyArray['query'] ?? null,
-                ]);
-            }
+            $log = resolve(\Psr\Log\LoggerInterface::class);
+            $log->error('SCOUT ES DSL', [
+                        'index' => $indexName,
+                        'model' => $class,
+                        'body'  => $bodyArray,
+            ]);
 
             $result = $client->search([
                 'index' => $indexName,
