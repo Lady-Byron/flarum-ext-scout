@@ -156,4 +156,26 @@ return [
 
     (new Extend\Event())
         ->listen(DiscussionEvent\Deleting::class, Listener\DeletingDiscussion::class),
+    (new Extend\ApiSerializer(DiscussionSerializer::class))
+    ->attributes(function (DiscussionSerializer $serializer, Discussion $discussion, array $attributes): array {
+        // 临时调试日志
+        resolve('log')->info('Scout Debug', [
+            'discussion_id' => $discussion->id,
+            'most_relevant_post_id' => $discussion->most_relevant_post_id ?? 'NOT SET',
+            'highlights_posts' => array_keys(ScoutStatic::$highlights['posts']),
+        ]);
+
+        $discussionHighlight = ScoutStatic::getDiscussionHighlight($discussion->id);
+        $attributes['titleHighlight'] = $discussionHighlight['title'][0] ?? null;
+
+        $mostRelevantPostId = $discussion->most_relevant_post_id ?? null;
+        if ($mostRelevantPostId) {
+            $postHighlight = ScoutStatic::getPostHighlight($mostRelevantPostId);
+            $attributes['contentHighlight'] = $postHighlight['content'][0] ?? null;
+        } else {
+            $attributes['contentHighlight'] = null;
+        }
+
+        return $attributes;
+    }),
 ];
