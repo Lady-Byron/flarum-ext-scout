@@ -44,21 +44,21 @@ return [
         ->command(ScoutConsole\DeleteIndexCommand::class),
 
     // [NEW] 扩展 DiscussionSerializer 输出高亮字段
+    // [FIX] 始终设置高亮属性（即使是 null），防止前端 Store 缓存残留
     (new Extend\ApiSerializer(DiscussionSerializer::class))
         ->attributes(function (DiscussionSerializer $serializer, Discussion $discussion, array $attributes): array {
             // 从 ScoutStatic 静态属性读取高亮数据
+            // 注意：始终设置属性值（即使是 null），防止前端 Store 缓存残留
             $discussionHighlight = ScoutStatic::getDiscussionHighlight($discussion->id);
-            if ($discussionHighlight) {
-                $attributes['titleHighlight'] = $discussionHighlight['title'][0] ?? null;
-            }
+            $attributes['titleHighlight'] = $discussionHighlight['title'][0] ?? null;
 
             // 如果有 most_relevant_post_id，获取帖子高亮
             $mostRelevantPostId = $discussion->most_relevant_post_id ?? null;
             if ($mostRelevantPostId) {
                 $postHighlight = ScoutStatic::getPostHighlight($mostRelevantPostId);
-                if ($postHighlight) {
-                    $attributes['contentHighlight'] = $postHighlight['content'][0] ?? null;
-                }
+                $attributes['contentHighlight'] = $postHighlight['content'][0] ?? null;
+            } else {
+                $attributes['contentHighlight'] = null;
             }
 
             return $attributes;
