@@ -17,13 +17,11 @@ app.initializers.add('lady-byron-scout', () => {
       const results = this.results.get(query.toLowerCase()) || [];
       if (!results.length) return;
 
-      // 遍历 vdom，找到讨论结果项并增强
       vdom.forEach((vnode: any) => {
         const dataIndex = vnode?.attrs?.['data-index'];
         if (!dataIndex || typeof dataIndex !== 'string') return;
         if (!dataIndex.startsWith('discussions')) return;
 
-        // 从 data-index 提取讨论 ID (格式: "discussions123")
         const discussionId = dataIndex.replace('discussions', '');
         const discussion = results.find((d: any) => String(d.id()) === discussionId);
         if (!discussion) return;
@@ -32,12 +30,10 @@ app.initializers.add('lady-byron-scout', () => {
         const contentHighlight = discussion.attribute('contentHighlight');
         const mostRelevantPost = discussion.mostRelevantPost?.();
 
-        // 构建标题内容：优先使用 ES 高亮
         const titleContent: Mithril.Children = titleHighlight
           ? m.trust(titleHighlight)
           : highlight(discussion.title() || '', query);
 
-        // 构建摘要内容
         let excerptContent: Mithril.Children = null;
         if (contentHighlight) {
           excerptContent = m.trust(contentHighlight);
@@ -46,11 +42,9 @@ app.initializers.add('lady-byron-scout', () => {
           if (plain) excerptContent = highlight(plain, query, 100);
         }
 
-        // 楼层直达链接
         const postNumber = mostRelevantPost?.number?.();
         const href = app.route.discussion(discussion, postNumber);
 
-        // 替换 vnode 内容
         vnode.children = [
           m(
             Link,
@@ -71,23 +65,36 @@ app.initializers.add('lady-byron-scout', () => {
     if (!discussion) return;
 
     const titleHighlight = discussion.attribute('titleHighlight');
-    if (!titleHighlight) return;
+    const contentHighlight = discussion.attribute('contentHighlight');
 
-    // 递归查找并替换标题元素
-    const replaceTitle = (node: any): void => {
+    // 如果都没有高亮，直接返回
+    if (!titleHighlight && !contentHighlight) return;
+
+    // 递归查找并替换元素
+    const replaceHighlights = (node: any): void => {
       if (!node || typeof node !== 'object') return;
 
-      // Mithril 有时会用 class 或 className
       const cls = node.attrs?.className || node.attrs?.class || '';
-      if (typeof cls === 'string' && cls.includes('DiscussionListItem-title')) {
-        node.children = [m.trust(titleHighlight)];
-        return;
+      if (typeof cls === 'string') {
+        // 替换标题
+        if (cls.includes('DiscussionListItem-title') && titleHighlight) {
+          node.children = [m.trust(titleHighlight)];
+          return;
+        }
+        // 替换正文摘要
+        if (cls.includes('DiscussionListItem-excerpt') && contentHighlight) {
+          node.children = [m.trust(contentHighlight)];
+          return;
+        }
       }
 
-      if (Array.isArray(node.children)) node.children.forEach(replaceTitle);
-      else if (node.children) replaceTitle(node.children);
+      if (Array.isArray(node.children)) {
+        node.children.forEach(replaceHighlights);
+      } else if (node.children) {
+        replaceHighlights(node.children);
+      }
     };
 
-    replaceTitle(vdom);
+    replaceHighlights(vdom);
   });
 });
