@@ -67,14 +67,6 @@ app.initializers.add('lady-byron-scout', () => {
     const titleHighlight = discussion.attribute('titleHighlight');
     const contentHighlight = discussion.attribute('contentHighlight');
 
-    // 调试日志
-    console.log('DiscussionListItem', {
-    id: discussion.id(),
-    titleHighlight: !!titleHighlight,
-    contentHighlight: !!contentHighlight,
-    contentHighlightValue: contentHighlight,
-    })
-
     if (!titleHighlight && !contentHighlight) return;
 
     const replaceHighlights = (node: any): void => {
