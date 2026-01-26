@@ -6,6 +6,36 @@ import Link from 'flarum/common/components/Link';
 import highlight from 'flarum/common/helpers/highlight';
 import type Mithril from 'mithril';
 
+/**
+ * 转义正则表达式特殊字符
+ */
+function escapeRegExp(string: string): string {
+  return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/**
+ * 安全的高亮函数包装器
+ * 将搜索词转换为转义后的正则表达式，避免特殊字符导致的错误
+ */
+function safeHighlight(
+  text: string,
+  phrase?: string | RegExp,
+  length?: number
+): Mithril.Vnode<any, any> | string {
+  if (!phrase) {
+    return highlight(text, phrase, length);
+  }
+  
+  // 如果已经是 RegExp，直接使用
+  if (phrase instanceof RegExp) {
+    return highlight(text, phrase, length);
+  }
+  
+  // 字符串转换为安全的正则表达式
+  const safeRegex = new RegExp(escapeRegExp(phrase), 'gi');
+  return highlight(text, safeRegex, length);
+}
+
 app.initializers.add('lady-byron-scout', () => {
   // 扩展搜索下拉菜单中讨论结果的渲染
   extend(
@@ -30,16 +60,18 @@ app.initializers.add('lady-byron-scout', () => {
         const contentHighlight = discussion.attribute('contentHighlight');
         const mostRelevantPost = discussion.mostRelevantPost?.();
 
+        // 使用 safeHighlight 替代 highlight
         const titleContent: Mithril.Children = titleHighlight
           ? m.trust(titleHighlight)
-          : highlight(discussion.title() || '', query);
+          : safeHighlight(discussion.title() || '', query);
 
         let excerptContent: Mithril.Children = null;
         if (contentHighlight) {
           excerptContent = m.trust(contentHighlight);
         } else if (mostRelevantPost) {
           const plain = mostRelevantPost.contentPlain?.();
-          if (plain) excerptContent = highlight(plain, query, 100);
+          // 使用 safeHighlight 替代 highlight
+          if (plain) excerptContent = safeHighlight(plain, query, 100);
         }
 
         const postNumber = mostRelevantPost?.number?.();
@@ -66,7 +98,6 @@ app.initializers.add('lady-byron-scout', () => {
 
     const titleHighlight = discussion.attribute('titleHighlight');
     const contentHighlight = discussion.attribute('contentHighlight');
-
     if (!titleHighlight && !contentHighlight) return;
 
     const replaceHighlights = (node: any): void => {
