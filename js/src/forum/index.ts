@@ -1,9 +1,10 @@
 import app from 'flarum/forum/app';
-import { extend } from 'flarum/common/extend';
+import { extend, override } from 'flarum/common/extend';
 import DiscussionsSearchSource from 'flarum/forum/components/DiscussionsSearchSource';
+import DiscussionsSearchItem from 'flarum/forum/components/DiscussionsSearchItem';
 import DiscussionListItem from 'flarum/forum/components/DiscussionListItem';
 import Link from 'flarum/common/components/Link';
-import highlight from 'flarum/common/helpers/highlight';
+import ItemList from 'flarum/common/utils/ItemList';
 import type Mithril from 'mithril';
 
 /**
@@ -14,82 +15,77 @@ function escapeRegExp(string: string): string {
 }
 
 /**
- * 安全的高亮函数包装器
- * 将搜索词转换为转义后的正则表达式，避免特殊字符导致的错误
+ * 安全的高亮函数
  */
 function safeHighlight(
-  text: string,
-  phrase?: string | RegExp,
+  string: string,
+  phrase?: string,
   length?: number
 ): Mithril.Vnode<any, any> | string {
-  if (!phrase) {
-    return highlight(text, phrase, length);
+  if (!phrase && !length) return string;
+
+  let highlighted = string;
+  let start = 0;
+
+  // 创建安全的正则表达式
+  const regexp = new RegExp(escapeRegExp(phrase ?? ''), 'gi');
+
+  // 截断逻辑
+  if (length) {
+    if (phrase) {
+      const matchIndex = string.search(regexp);
+      start = Math.max(0, matchIndex === -1 ? 0 : matchIndex - Math.floor(length / 2));
+    }
+    highlighted = string.substring(start, start + length);
+    if (start > 0) highlighted = '...' + highlighted;
+    if (start + length < string.length) highlighted = highlighted + '...';
   }
+
+  // 转义 HTML 实体
+  highlighted = $('<div/>').text(highlighted).html() as string;
   
-  // 如果已经是 RegExp，直接使用
-  if (phrase instanceof RegExp) {
-    return highlight(text, phrase, length);
+  // 高亮匹配
+  if (phrase) {
+    highlighted = highlighted.replace(regexp, '<mark>$&</mark>');
   }
-  
-  // 字符串转换为安全的正则表达式
-  const safeRegex = new RegExp(escapeRegExp(phrase), 'gi');
-  return highlight(text, safeRegex, length);
+
+  return m.trust(highlighted);
 }
 
 app.initializers.add('lady-byron-scout', () => {
-  // 扩展搜索下拉菜单中讨论结果的渲染
-  extend(
-    DiscussionsSearchSource.prototype,
-    'view',
-    function (this: DiscussionsSearchSource, vdom: Mithril.Vnode[], query: string) {
-      if (!Array.isArray(vdom)) return;
+  
+  // 🔧 关键修复：覆盖 DiscussionsSearchItem 的 viewItems 方法
+  override(DiscussionsSearchItem.prototype, 'viewItems', function (this: DiscussionsSearchItem, original: () => ItemList<Mithril.Children>) {
+    const items = new ItemList<Mithril.Children>();
 
-      const results = this.results.get(query.toLowerCase()) || [];
-      if (!results.length) return;
+    // 优先使用 ES 返回的高亮，否则使用 safeHighlight
+    const titleHighlight = this.discussion.attribute('titleHighlight');
+    const contentHighlight = this.discussion.attribute('contentHighlight');
 
-      vdom.forEach((vnode: any) => {
-        const dataIndex = vnode?.attrs?.['data-index'];
-        if (!dataIndex || typeof dataIndex !== 'string') return;
-        if (!dataIndex.startsWith('discussions')) return;
+    const titleContent = titleHighlight
+      ? m.trust(titleHighlight)
+      : safeHighlight(this.discussionTitle(), this.query);
 
-        const discussionId = dataIndex.replace('discussions', '');
-        const discussion = results.find((d: any) => String(d.id()) === discussionId);
-        if (!discussion) return;
+    items.add(
+      'discussion-title',
+      <div className="DiscussionSearchResult-title">{titleContent}</div>,
+      90
+    );
 
-        const titleHighlight = discussion.attribute('titleHighlight');
-        const contentHighlight = discussion.attribute('contentHighlight');
-        const mostRelevantPost = discussion.mostRelevantPost?.();
+    if (this.mostRelevantPost) {
+      const excerptContent = contentHighlight
+        ? m.trust(contentHighlight)
+        : safeHighlight(this.mostRelevantPostContent() ?? '', this.query, 100);
 
-        // 使用 safeHighlight 替代 highlight
-        const titleContent: Mithril.Children = titleHighlight
-          ? m.trust(titleHighlight)
-          : safeHighlight(discussion.title() || '', query);
-
-        let excerptContent: Mithril.Children = null;
-        if (contentHighlight) {
-          excerptContent = m.trust(contentHighlight);
-        } else if (mostRelevantPost) {
-          const plain = mostRelevantPost.contentPlain?.();
-          // 使用 safeHighlight 替代 highlight
-          if (plain) excerptContent = safeHighlight(plain, query, 100);
-        }
-
-        const postNumber = mostRelevantPost?.number?.();
-        const href = app.route.discussion(discussion, postNumber);
-
-        vnode.children = [
-          m(
-            Link,
-            { href },
-            [
-              m('div', { className: 'DiscussionSearchResult-title' }, titleContent),
-              excerptContent ? m('div', { className: 'DiscussionSearchResult-excerpt' }, excerptContent) : null,
-            ].filter(Boolean)
-          ),
-        ];
-      });
+      items.add(
+        'most-relevant',
+        <div className="DiscussionSearchResult-excerpt">{excerptContent}</div>,
+        80
+      );
     }
-  );
+
+    return items;
+  });
 
   // 扩展讨论列表页面的高亮显示（搜索结果页）
   extend(DiscussionListItem.prototype, 'view', function (this: DiscussionListItem, vdom: Mithril.Vnode) {
@@ -105,12 +101,10 @@ app.initializers.add('lady-byron-scout', () => {
 
       const cls = node.attrs?.className || node.attrs?.class || '';
       if (typeof cls === 'string') {
-        // 替换标题
         if (cls.includes('DiscussionListItem-title') && titleHighlight) {
           node.children = [m.trust(titleHighlight)];
           return;
         }
-        // 替换正文摘要
         if (cls.includes('item-excerpt') && contentHighlight) {
           node.children = [m.trust(contentHighlight)];
           return;
