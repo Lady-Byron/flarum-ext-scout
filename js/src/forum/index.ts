@@ -1,9 +1,7 @@
 import app from 'flarum/forum/app';
 import { extend, override } from 'flarum/common/extend';
-import DiscussionsSearchSource from 'flarum/forum/components/DiscussionsSearchSource';
 import DiscussionsSearchItem from 'flarum/forum/components/DiscussionsSearchItem';
 import DiscussionListItem from 'flarum/forum/components/DiscussionListItem';
-import Link from 'flarum/common/components/Link';
 import ItemList from 'flarum/common/utils/ItemList';
 import type Mithril from 'mithril';
 
@@ -27,10 +25,8 @@ function safeHighlight(
   let highlighted = string;
   let start = 0;
 
-  // 创建安全的正则表达式
   const regexp = new RegExp(escapeRegExp(phrase ?? ''), 'gi');
 
-  // 截断逻辑
   if (length) {
     if (phrase) {
       const matchIndex = string.search(regexp);
@@ -41,10 +37,8 @@ function safeHighlight(
     if (start + length < string.length) highlighted = highlighted + '...';
   }
 
-  // 转义 HTML 实体
   highlighted = $('<div/>').text(highlighted).html() as string;
   
-  // 高亮匹配
   if (phrase) {
     highlighted = highlighted.replace(regexp, '<mark>$&</mark>');
   }
@@ -54,11 +48,10 @@ function safeHighlight(
 
 app.initializers.add('lady-byron-scout', () => {
   
-  // 🔧 关键修复：覆盖 DiscussionsSearchItem 的 viewItems 方法
+  // 覆盖 DiscussionsSearchItem 的 viewItems 方法
   override(DiscussionsSearchItem.prototype, 'viewItems', function (this: DiscussionsSearchItem, original: () => ItemList<Mithril.Children>) {
     const items = new ItemList<Mithril.Children>();
 
-    // 优先使用 ES 返回的高亮，否则使用 safeHighlight
     const titleHighlight = this.discussion.attribute('titleHighlight');
     const contentHighlight = this.discussion.attribute('contentHighlight');
 
@@ -68,7 +61,7 @@ app.initializers.add('lady-byron-scout', () => {
 
     items.add(
       'discussion-title',
-      <div className="DiscussionSearchResult-title">{titleContent}</div>,
+      m('div', { className: 'DiscussionSearchResult-title' }, titleContent),
       90
     );
 
@@ -79,7 +72,7 @@ app.initializers.add('lady-byron-scout', () => {
 
       items.add(
         'most-relevant',
-        <div className="DiscussionSearchResult-excerpt">{excerptContent}</div>,
+        m('div', { className: 'DiscussionSearchResult-excerpt' }, excerptContent),
         80
       );
     }
@@ -87,7 +80,7 @@ app.initializers.add('lady-byron-scout', () => {
     return items;
   });
 
-  // 扩展讨论列表页面的高亮显示（搜索结果页）
+  // 扩展讨论列表页面的高亮显示
   extend(DiscussionListItem.prototype, 'view', function (this: DiscussionListItem, vdom: Mithril.Vnode) {
     const discussion = this.attrs.discussion;
     if (!discussion) return;
