@@ -18,11 +18,11 @@
     },
     "extra": {
         "flarum-extension": {
-            "title": "Elasticsearch",
+            "title": "Flop Search",
             "category": "feature",
             "icon": {
                 "name": "fas fa-search",
-                "backgroundColor": "#f47f68",
+                "backgroundColor": "#5B8C5A",
                 "color": "#fff"
             }
         }
