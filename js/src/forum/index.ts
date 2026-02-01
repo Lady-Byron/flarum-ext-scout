@@ -6,6 +6,14 @@ import ItemList from 'flarum/common/utils/ItemList';
 import type Mithril from 'mithril';
 
 /**
+ * 清理 ES 返回的高亮 HTML，只保留 <mark> 和 </mark> 标签
+ * 防止 XSS：即使 ES 的 html encoder 配置被意外更改，也能确保安全
+ */
+function sanitizeHighlight(html: string): string {
+  return html.replace(/<(?!\/?mark>)[^>]*>/gi, '');
+}
+
+/**
  * 转义正则表达式特殊字符
  */
 function escapeRegExp(string: string): string {
@@ -56,7 +64,7 @@ app.initializers.add('lady-byron-scout', () => {
     const contentHighlight = this.discussion.attribute('contentHighlight');
 
     const titleContent = titleHighlight
-      ? m.trust(titleHighlight)
+      ? m.trust(sanitizeHighlight(titleHighlight))
       : safeHighlight(this.discussionTitle(), this.query);
 
     items.add(
@@ -67,7 +75,7 @@ app.initializers.add('lady-byron-scout', () => {
 
     if (this.mostRelevantPost) {
       const excerptContent = contentHighlight
-        ? m.trust(contentHighlight)
+        ? m.trust(sanitizeHighlight(contentHighlight))
         : safeHighlight(this.mostRelevantPostContent() ?? '', this.query, 100);
 
       items.add(
@@ -95,11 +103,11 @@ app.initializers.add('lady-byron-scout', () => {
       const cls = node.attrs?.className || node.attrs?.class || '';
       if (typeof cls === 'string') {
         if (cls.includes('DiscussionListItem-title') && titleHighlight) {
-          node.children = [m.trust(titleHighlight)];
+          node.children = [m.trust(sanitizeHighlight(titleHighlight))];
           return;
         }
         if (cls.includes('item-excerpt') && contentHighlight) {
-          node.children = [m.trust(contentHighlight)];
+          node.children = [m.trust(sanitizeHighlight(contentHighlight))];
           return;
         }
       }

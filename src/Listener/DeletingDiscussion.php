@@ -3,18 +3,35 @@
 namespace ClarkWinkelmann\Scout\Listener;
 
 use Flarum\Discussion\Event\Deleting;
+use Flarum\Post\Post;
+use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 
 class DeletingDiscussion
 {
     public function handle(Deleting $event)
     {
-        // Retrieve list of post models before the deletion actually occurs
-        $posts = $event->discussion->posts;
+        // 仅加载帖子 ID（而非完整模型），减少内存占用
+        $postIds = $event->discussion->posts()->pluck('id')->all();
 
-        // Flarum doesn't dispatch the Deleted event for each post when deleting a discussion, so we'll hook into it manually
-        // This is also an opportunity to delete all posts from the index in a single job/request instead of one by one
-        $event->discussion->afterDelete(function () use ($posts) {
-            $posts->unsearchable();
+        // Flarum 不会为每个帖子单独触发 Deleted 事件，所以我们手动处理
+        // 使用 afterDelete 确保在讨论删除后再从索引中移除帖子
+        $event->discussion->afterDelete(function () use ($postIds) {
+            if (empty($postIds)) {
+                return;
+            }
+
+            // 分批处理避免 OOM
+            foreach (array_chunk($postIds, 100) as $chunk) {
+                $posts = new EloquentCollection(
+                    array_map(function ($id) {
+                        $post = new Post();
+                        $post->id = $id;
+                        return $post;
+                    }, $chunk)
+                );
+
+                $posts->unsearchable();
+            }
         });
     }
 }

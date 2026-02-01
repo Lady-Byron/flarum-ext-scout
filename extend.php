@@ -120,6 +120,10 @@ return [
             if ($post->hidden_at !== null) {
                 return false;
             }
+            // 检查所属讨论是否已隐藏
+            if ($post->discussion && $post->discussion->hidden_at !== null) {
+                return false;
+            }
             return null;
         })
         ->attributes(function (Post $post): array {
@@ -139,6 +143,13 @@ return [
         ->listenSaved(UserEvent\Registered::class, function (UserEvent\Registered $event) {
             return $event->user;
         })
+        // 监听用户名/显示名变更，仅在搜索相关字段修改时触发重新索引
+        ->listenSaved(UserEvent\Saving::class, function (UserEvent\Saving $event) {
+            if ($event->user->isDirty(['username', 'display_name'])) {
+                return $event->user;
+            }
+            return null;
+        })
         ->listenDeleted(UserEvent\Deleted::class, function (UserEvent\Deleted $event) {
             return $event->user;
         })
@@ -155,5 +166,8 @@ return [
         }),
 
     (new Extend\Event())
+        // 讨论隐藏/恢复时级联更新其下所有帖子的索引
+        ->listen(DiscussionEvent\Hidden::class, Listener\DiscussionHiddenRestored::class)
+        ->listen(DiscussionEvent\Restored::class, Listener\DiscussionHiddenRestored::class)
         ->listen(DiscussionEvent\Deleting::class, Listener\DeletingDiscussion::class),
 ];

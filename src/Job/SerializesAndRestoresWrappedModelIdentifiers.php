@@ -5,8 +5,15 @@ namespace ClarkWinkelmann\Scout\Job;
 use ClarkWinkelmann\Scout\ScoutModelWrapper;
 use Illuminate\Contracts\Database\ModelIdentifier;
 use Illuminate\Contracts\Queue\QueueableCollection;
-use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 
+/**
+ * 处理 ScoutModelWrapper 的队列序列化
+ *
+ * 仅提供序列化方法（getSerializedPropertyValue）。
+ * restoreCollection 由各 Job 子类自行实现，因为：
+ * - MakeSearchable 需要从数据库加载完整模型（索引操作需要全部属性）
+ * - RemoveFromSearch 只需创建含 ID 的存根模型（删除操作只需 ID，且原始记录可能已不存在）
+ */
 trait SerializesAndRestoresWrappedModelIdentifiers
 {
     protected function getSerializedPropertyValue($value)
@@ -26,12 +33,5 @@ trait SerializesAndRestoresWrappedModelIdentifiers
 
         // [FIX #11] 修复原版 bug：应该调用 getSerializedPropertyValue 而非 getRestoredPropertyValue
         return parent::getSerializedPropertyValue($value);
-    }
-
-    protected function restoreCollection($value)
-    {
-        $collection = parent::restoreCollection($value);
-        $wrapped = $collection->map(fn($m) => new ScoutModelWrapper($m));
-        return new EloquentCollection($wrapped->all());
     }
 }
